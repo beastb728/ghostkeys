@@ -157,7 +157,15 @@ class Typist:
         self.cps = wpm * 5 / 60                        # counted chars / sec wanted
         self.wrong_ratio = max(0.0, raw / wpm - 1)     # raw-only chars per wpm char
         self.err_rate = max(0.0, 1 - acc / 100)        # incorrect keypress share
+        self.r0 = 1 + 3 * self.err_rate + self.wrong_ratio
+        # Per-key jitter already adds ~0.45/sqrt(keys per sec) of per-second variation,
+        # so only add the remainder through the speed profile.
         cov = consistency_to_cov(consistency)
+        noise2 = 0.45 ** 2 / (self.cps * self.r0)
+        if cov > 0 and cov ** 2 < noise2:
+            print(f"[!] consistency {consistency}% is above what this speed naturally allows; "
+                  "it will land a bit lower")
+        cov = math.sqrt(max(0.0, cov ** 2 - noise2)) if cov > 0 else 0.0
         self.prof = speed_profile(int(est_seconds) + 5, cov, warmup, fatigue)
         self.cum = [0.0]
         for m in self.prof:
@@ -169,7 +177,6 @@ class Typist:
         self.wrong_chars = 0    # chars only counted toward raw
         self.in_word = 0        # provisional progress in current word
         self.err_budget = 0.0
-        self.r0 = 1 + 3 * self.err_rate + self.wrong_ratio
 
     # -- pacing
     def _expected(self, t: float) -> float:
@@ -205,8 +212,8 @@ class Typist:
 
     # -- decisions
     def _want_typo(self) -> bool:
-        self.err_budget += self.err_rate
-        if self.err_budget >= 1 and random.random() < 0.35:
+        self.err_budget += self.err_rate * 1.15
+        if self.err_budget >= 1 and random.random() < 0.6:
             self.err_budget -= 1
             return True
         return False
