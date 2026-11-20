@@ -325,6 +325,8 @@ class Typist:
         self.err_budget = 0.0
         self.per_sec: dict[int, int] = {}
         self.progress = 0.0     # 0..1, set by the runner
+        self.current = ""       # word being typed (for the live ticker)
+        self.recent: list[list] = []  # last few [word, ok]
 
     # -- live stats
     def elapsed(self) -> float:
@@ -342,7 +344,12 @@ class Typist:
             "keys": self.keys, "typos": self.typos, "left_wrong": self.left_wrong,
             "history": [self.per_sec.get(s, 0) * 12 for s in range(cur)],
             "progress": self.progress,
+            "current": self.current, "in_word": self.in_word, "recent": self.recent[-12:],
         }
+
+    def _finish_word(self, word: str, ok: bool) -> None:
+        self.recent = (self.recent + [[word, ok]])[-12:]
+        self.current = ""
 
     # -- pacing
     def _expected(self, t: float) -> float:
@@ -398,6 +405,7 @@ class Typist:
     # -- typing
     def type_word(self, word: str) -> None:
         self.in_word = 0
+        self.current = word
         if self._leave_word_wrong(word):
             bad = random.randrange(len(word))
             for i, ch in enumerate(word):
@@ -407,6 +415,7 @@ class Typist:
             self.left_wrong += 1
             self._send("Space")
             self.wrong_chars += len(word) + 1
+            self._finish_word(word, False)
             return
 
         i = 0
@@ -426,9 +435,10 @@ class Typist:
         self._send("Space")
         self.committed += len(word) + 1
         self.in_word = 0
+        self._finish_word(word, True)
 
 
-def run_test(page, cfg: dict, rep: Reporter) -> dict:
+def run_test(page, cfg: dict, rep: Reporter, stop=None) -> dict | None:
     wpm = pick(cfg["wpm"])
     raw = max(wpm, float(cfg["raw"]) if cfg.get("raw") else wpm + float(cfg.get("raw_gap", 0)))
     kind, _, amount = cfg["mode"].partition(" ")
@@ -457,6 +467,8 @@ def run_test(page, cfg: dict, rep: Reporter) -> dict:
     last_idx, stall, last_emit = None, time.perf_counter(), 0.0
     try:
         while True:
+            if stop is not None and stop.is_set():
+                return None
             st = page.evaluate(STATE_JS)
             if st["done"]:
                 break
@@ -464,10 +476,11 @@ def run_test(page, cfg: dict, rep: Reporter) -> dict:
                 t.progress = min(1.0, t.elapsed() / est)
             elif st["idx"] is not None and total_words:
                 t.progress = min(1.0, st["idx"] / total_words)
-            if rep.ui == "json" and time.perf_counter() - last_emit > 0.25:
+            if rep.ui == "json" and time.perf_counter() - last_emit > 0.1:
                 s = t.stats()
-                rep.emit("progress", **{k: s[k] for k in ("elapsed", "wpm", "raw", "acc", "keys",
-                                                          "typos", "history", "progress")})
+                rep.emit("progress", **{k: s[k] for k in (
+                    "elapsed", "wpm", "raw", "acc", "keys", "typos", "left_wrong", "history",
+                    "progress", "current", "in_word", "recent")})
                 last_emit = time.perf_counter()
             if st["word"] is None or st["idx"] == last_idx:
                 if time.perf_counter() - stall > 2.0:
@@ -512,6 +525,7 @@ def main() -> None:
     ap.add_argument("--preset", choices=PRESETS, default="fast")
     ap.add_argument("--wpm")
     ap.add_argument("--raw", help="target raw wpm (default: wpm + preset gap)")
+    ap.add_argument("--raw-gap", type=float, help="raw = wpm + this (alternative to --raw)")
     ap.add_argument("--acc", type=float)
     ap.add_argument("--consistency", type=float)
     ap.add_argument("--warmup", type=float)
@@ -525,11 +539,15 @@ def main() -> None:
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--ui", choices=["rich", "plain", "json"],
                     default="rich" if sys.stdout.isatty() else "plain")
+    ap.add_argument("--serve", action="store_true",
+                    help="(used by panel.py) keep one browser open and take runs as JSON on stdin")
     args = ap.parse_args()
+    if args.serve:
+        return serve()
 
     cfg = dict(PRESETS[args.preset], raw=None, mode=args.mode, loops=args.loops,
                language=args.language, punctuation=args.punctuation, numbers=args.numbers)
-    for k in ("wpm", "raw", "acc", "consistency", "warmup", "fatigue"):
+    for k in ("wpm", "raw", "raw_gap", "acc", "consistency", "warmup", "fatigue"):
         if getattr(args, k) is not None:
             cfg[k] = getattr(args, k)
     if args.menu:
@@ -554,6 +572,105 @@ def main() -> None:
         if not args.headless and sys.stdin.isatty() and args.ui != "json":
             input("Press Enter to close the browser...")
         browser.close()
+
+
+def serve() -> None:
+    """Long-lived worker for panel.py.
+
+    Keeps ONE Monkeytype window open between runs. Reads JSON lines on stdin:
+      {"cmd": "run", "cfg": {...}}   start tests in the open window
+      {"cmd": "stop"}                stop typing (window stays open)
+      {"cmd": "quit"}                close the browser and exit
+    """
+    import queue
+    import threading
+
+    rep = Reporter("json")
+    cmds: "queue.Queue[dict]" = queue.Queue()
+    stop = threading.Event()
+
+    def reader() -> None:
+        for line in sys.stdin:
+            try:
+                msg = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if msg.get("cmd") == "stop":
+                stop.set()
+            else:
+                cmds.put(msg)
+        cmds.put({"cmd": "quit"})
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    with sync_playwright() as p:
+        browser = page = None
+        cur: dict = {}
+        dirty = False  # page shows a finished/abandoned test
+
+        def window_alive() -> bool:
+            try:
+                return browser is not None and browser.is_connected() and not page.is_closed()
+            except Exception:
+                return False
+
+        rep.emit("ready")
+        while True:
+            msg = cmds.get()
+            if msg.get("cmd") == "quit":
+                break
+            if msg.get("cmd") != "run":
+                continue
+            cfg = dict(PRESETS["fast"], raw=None, mode="time 30", loops=1, language="english")
+            cfg.update({k: v for k, v in msg.get("cfg", {}).items() if v is not None})
+            headless = bool(cfg.get("headless"))
+            stop.clear()
+            rep.emit("busy")
+            try:
+                if not window_alive() or cur.get("headless") != headless:
+                    if browser is not None:
+                        try:
+                            browser.close()
+                        except Exception:
+                            pass
+                    rep.emit("log", msg="opening monkeytype...")
+                    browser = p.chromium.launch(headless=headless)
+                    # Fresh context: no cookies, never signed in -> guest only.
+                    page = browser.new_context(viewport={"width": 1280, "height": 800}).new_page()
+                    open_monkeytype(page)
+                    cur = dict(fresh_page_state(), headless=headless)
+                    dirty = False
+                if dirty:
+                    new_test(page)
+                configure(page, cfg, cur, rep)
+
+                loops = int(cfg["loops"])
+                for i in range(loops):
+                    if stop.is_set():
+                        break
+                    if i:
+                        new_test(page)
+                    rep.emit("log", msg=f"--- test {i + 1}/{loops} ({cfg['mode']})")
+                    dirty = True
+                    run_test(page, cfg, rep, stop)
+                if stop.is_set():
+                    new_test(page)  # leave a clean, ready test on screen
+                    dirty = False
+                    rep.emit("stopped")
+                else:
+                    rep.emit("done")
+            except Exception as e:
+                if not window_alive():
+                    rep.emit("log", msg="[!] browser window was closed")
+                else:
+                    rep.emit("log", msg=f"[!] {type(e).__name__}: {str(e).splitlines()[0][:160]}")
+                rep.emit("done")
+
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

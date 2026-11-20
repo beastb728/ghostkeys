@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>monkebot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f7f4;
+    --paper: #ffffff;
+    --ink: #0d0d0c;
+    --ink-2: #2b2b29;
+    --muted: #6d6d68;
+    --faint: #a5a59f;
+    --line: #e7e7e2;
+    --line-2: #d6d6d0;
+    --ok: #15803d;
+    --off: #b45309;
+    --bad: #c2410c;
+    --sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --serif: "Instrument Serif", ui-serif, Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink); font: 15px/1.5 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(to right, rgba(0,0,0,.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0,0,0,.035) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 40px 64px; }
+  @media (max-width: 640px) { .wrap { padding: 0 16px 48px; } }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 12px; z-index: 5; margin: 12px auto 0; max-width: 1200px;
+    display: flex; align-items: center; gap: 18px; padding: 8px 8px 8px 20px;
+    background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 999px;
+  }
+  .brand { font: 400 20px var(--sans); letter-spacing: -.03em; display: flex; align-items: flex-start; gap: 5px; }
+  .brand sup { font: 500 9px var(--mono); color: var(--muted); letter-spacing: .06em; margin-top: 4px; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  .live { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--muted); }
+  .live .sep { width: 1px; height: 14px; background: var(--line-2); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .dot.idle { background: var(--ink-2); }
+  .dot.on { background: #22c55e; animation: blink 1.2s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  .live span { white-space: nowrap; }
+  @media (max-width: 640px) { .live .clock, .live .sep { display: none; } nav { padding-left: 16px; gap: 10px; } }
+  @media (max-width: 420px) { #statusText { display: none; } }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; cursor: pointer;
+    font: 500 14px var(--sans); padding: 10px 18px; border: 1px solid var(--ink);
+    background: var(--ink); color: #fff; transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  .pill:hover { background: var(--ink-2); }
+  .pill .arr { font-family: var(--mono); font-size: 13px; }
+  .pill.stop { background: #fff; color: var(--bad); border-color: var(--bad); }
+  .pill.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
+  .pill.ghost:hover:not(:disabled) { border-color: var(--ink); }
+  .pill:disabled { opacity: .35; cursor: default; }
+  .pill.small { padding: 8px 14px; font-size: 13px; }
+
+  /* ---------- section labels ---------- */
+  .eyebrow {
+    display: flex; align-items: center; gap: 12px; font: 12px var(--mono); color: var(--muted);
+  }
+  .eyebrow::before { content: ""; width: 28px; height: 1px; background: var(--line-2); }
+  .eyebrow b { font-weight: 500; color: var(--ink); }
+  section { margin-top: 56px; }
+
+  /* ---------- live hero ---------- */
+  .hero-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .elapsed { font: 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: 40px; align-items: end; margin-top: 18px; }
+  @media (max-width: 1000px) { .hero { grid-template-columns: 1fr; gap: 28px; } }
+  .big { display: flex; align-items: baseline; gap: 14px; }
+  .big .num { font: 400 clamp(110px, 17vw, 220px)/.82 var(--sans); letter-spacing: -.065em; font-variant-numeric: tabular-nums; }
+  .big .unit { font: italic 400 clamp(32px, 4vw, 48px)/1 var(--serif); color: var(--muted); }
+  .target-line { margin-top: 20px; display: flex; gap: 14px; align-items: baseline; font: 13px var(--mono); color: var(--muted); }
+  .target-line b { color: var(--ink); font-weight: 500; }
+  .delta { font: 500 12px var(--mono); }
+  .delta.ok { color: var(--ok); }
+  .delta.off { color: var(--off); }
+
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line-2); border-left: 1px solid var(--line-2); background: rgba(255,255,255,.6); }
+  .stat { padding: 18px 20px 16px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); min-width: 0; }
+  .stat .v { font: 400 44px/1 var(--sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .stat .v small { font: italic 400 22px var(--serif); color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+  .stat .k { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; font: 12px var(--sans); color: var(--muted); }
+  .stat .k span:last-child { font: 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--faint); white-space: nowrap; }
+  @media (max-width: 520px) { .stat .v { font-size: 34px; } .stat { padding: 14px; } }
+
+  /* dark block: ticker + chart */
+  .term {
+    margin-top: 32px; background: var(--ink); color: #f2f2ee; border-radius: 4px; overflow: hidden; position: relative;
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 1px, transparent 1px 9px);
+  }
+  .term-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,.09); font: 12px var(--mono); color: rgba(255,255,255,.5); }
+  .term-bar b { color: #fff; font-weight: 400; }
+  .bar-track { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: rgba(255,255,255,.08); }
+  .bar-fill { height: 100%; width: 0; background: #fff; transition: width .15s linear; }
+  .ticker {
+    height: 64px; display: flex; align-items: center; justify-content: flex-end; padding: 0 22px;
+    font: 400 22px var(--mono); white-space: nowrap; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,.09);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 40%);
+            mask-image: linear-gradient(90deg, transparent, #000 40%);
+  }
+  .ticker .w { margin-left: .6em; color: rgba(255,255,255,.28); }
+  .ticker .w.bad { color: #fb923c; text-decoration: line-through; text-decoration-thickness: 1px; }
+  .ticker .cur { margin-left: .6em; color: rgba(255,255,255,.35); }
+  .ticker .cur b { color: #fff; font-weight: 400; }
+  .caret { display: inline-block; width: 2px; height: 1em; vertical-align: -3px; background: #fff; animation: blink 1s steps(2, start) infinite; }
+  .ticker .ph { font-size: 14px; color: rgba(255,255,255,.45); }
+  .chart { padding: 14px 18px 12px; }
+  canvas { width: 100%; height: 190px; display: block; }
+  .term-foot { display: flex; justify-content: space-between; padding: 0 18px 14px; font: 11px var(--mono); color: rgba(255,255,255,.45); gap: 12px; flex-wrap: wrap; }
+  .term-foot b { color: #fff; font-weight: 400; }
+
+  /* ---------- controls ---------- */
+  .controls { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); border: 1px solid var(--line-2); background: var(--paper); margin-top: 18px; }
+  @media (max-width: 900px) { .controls { grid-template-columns: 1fr; } }
+  .cell { padding: 26px 28px; min-width: 0; }
+  .cell + .cell { border-left: 1px solid var(--line-2); }
+  @media (max-width: 900px) { .cell + .cell { border-left: 0; border-top: 1px solid var(--line-2); } }
+  @media (max-width: 520px) { .cell { padding: 20px 16px; } }
+  .cell h3 { margin: 0 0 4px; font: 400 26px var(--sans); letter-spacing: -.03em; display: flex; align-items: baseline; gap: 12px; }
+  .cell h3 .rn { font: 400 13px var(--mono); color: var(--faint); }
+  .cell p.sub { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 7px; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line-2); background: transparent; color: var(--ink); font: 400 13.5px var(--sans);
+    transition: border-color .12s, background .12s, color .12s;
+  }
+  .chip small { font: 11px var(--mono); color: var(--faint); }
+  .chip:hover { border-color: var(--ink); }
+  .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .chip.on small { color: rgba(255,255,255,.55); }
+
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 32px; }
+  .sliders .wide { grid-column: 1 / -1; }
+  @media (max-width: 560px) { .sliders { grid-template-columns: 1fr; } }
+  .ctl-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .ctl-head span { font-size: 14px; color: var(--ink-2); }
+  .val { font: 13px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .val i { font-style: normal; color: var(--faint); }
+
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; margin: 0; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(90deg, var(--ink) var(--p, 50%), var(--line-2) var(--p, 50%)); }
+  input[type=range]::-moz-range-track { height: 2px; background: var(--line-2); }
+  input[type=range]::-moz-range-progress { height: 2px; background: var(--ink); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%; background: #fff; border: 1.5px solid var(--ink); }
+  input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 1.5px solid var(--ink); }
+  input[type=range]:focus-visible { outline: none; }
+  input[type=range]:focus-visible::-webkit-slider-thumb { background: var(--ink); }
+
+  .dual { position: relative; height: 16px; }
+  .dual .track { position: absolute; left: 0; right: 0; top: 7px; height: 2px; background: var(--line-2); }
+  .dual .fill { position: absolute; top: 0; bottom: 0; background: var(--ink); }
+  .dual input { position: absolute; inset: 0; pointer-events: none; }
+  .dual input::-webkit-slider-runnable-track { background: transparent; }
+  .dual input::-moz-range-track, .dual input::-moz-range-progress { background: transparent; }
+  .dual input::-webkit-slider-thumb { pointer-events: auto; }
+  .dual input::-moz-range-thumb { pointer-events: auto; }
+
+  .group { margin-bottom: 20px; }
+  .group-l { font: 12px var(--mono); color: var(--muted); margin-bottom: 9px; display: block; }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .opts .chip { padding: 6px 13px; }
+  .opts.mono .chip { font: 12.5px var(--mono); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 128px; gap: 14px; margin-bottom: 18px; }
+  .text {
+    width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 6px; background: #fff;
+    font: 13px var(--mono); color: var(--ink); outline: none;
+  }
+  .text:focus { border-color: var(--ink); }
+  .stepper { display: flex; height: 38px; border: 1px solid var(--line-2); border-radius: 6px; background: #fff; }
+  .stepper button { width: 38px; border: 0; background: transparent; cursor: pointer; font: 15px var(--mono); color: var(--muted); }
+  .stepper button:hover { color: var(--ink); }
+  .stepper output { flex: 1; display: grid; place-items: center; font: 13px var(--mono); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+
+  .toggles { border-top: 1px solid var(--line); margin-bottom: 22px; }
+  .toggle { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 14px; color: var(--ink-2); }
+  .toggle input { display: none; }
+  .sw { width: 30px; height: 16px; border-radius: 999px; background: var(--line-2); position: relative; flex: none; transition: background .15s; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .toggle input:checked + .sw { background: var(--ink); }
+  .toggle input:checked + .sw::after { transform: translateX(14px); }
+  .toggle:has(input:disabled) { color: var(--faint); cursor: default; }
+  .toggle input:disabled + .sw { opacity: .4; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .actions .hint { font: 12px var(--mono); color: var(--faint); margin-left: auto; }
+  kbd { font: 11px var(--mono); padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 4px; background: #fff; color: var(--muted); }
+  .pill kbd { background: transparent; border-color: rgba(255,255,255,.3); color: rgba(255,255,255,.7); }
+  .pill.stop kbd { border-color: rgba(194,65,12,.35); color: var(--bad); }
+  @media (max-width: 520px) { .actions .hint { display: none; } }
+
+  /* ---------- results ---------- */
+  .table { margin-top: 18px; border-top: 1px solid var(--line-2); }
+  .tr { display: grid; grid-template-columns: 48px minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 12px; align-items: baseline; padding: 16px 4px; border-bottom: 1px solid var(--line); }
+  .tr.th { font: 11px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 12px 4px; }
+  .tr .n { font: 12px var(--mono); color: var(--faint); }
+  .tr .what { min-width: 0; }
+  .tr .what div { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tr .what small { font: 11px var(--mono); color: var(--faint); }
+  .m b { font: 400 26px/1 var(--sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .m .delta { display: block; margin-top: 6px; font-size: 11px; }
+  .m .t { font: 11px var(--mono); color: var(--faint); margin-left: 4px; }
+  .empty { padding: 34px 0; color: var(--muted); font: 13px var(--mono); }
+  @media (max-width: 700px) {
+    .tr { grid-template-columns: 30px repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .tr .what { display: none; }
+    .m b { font-size: 21px; }
+    .m .t { display: none; }
+  }
+  .linkbtn { background: none; border: 0; padding: 0; cursor: pointer; font: 12px var(--mono); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+  .linkbtn:hover { color: var(--ink); }
+  .sec-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+  /* console */
+  details { margin-top: 18px; border: 1px solid var(--line-2); background: var(--paper); }
+  summary { list-style: none; cursor: pointer; padding: 13px 18px; display: flex; gap: 14px; justify-content: space-between; font: 12px var(--mono); color: var(--muted); }
+  summary::-webkit-details-marker { display: none; }
+  summary .last { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details[open] summary .last { display: none; }
+  .log { margin: 0; padding: 0 18px 16px; font: 12px/1.75 var(--mono); color: var(--ink-2); max-height: 180px; overflow: auto; white-space: pre-wrap; }
+
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line-2); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font: 12px var(--mono); color: var(--faint); }
+
+  @media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<nav>
+  <div class="brand">monkebot<sup>guest</sup></div>
+  <div class="spacer"></div>
+  <div class="live"><span class="dot" id="dot"></span><span id="statusText">Idle</span><span class="sep"></span><span class="clock" id="clock">--:--:--</span></div>
+  <button class="pill small" id="navGo"><span id="navGoText">Start typing</span><span class="arr">→</span></button>
+</nav>
+
+<div class="wrap">
+  <!-- ================= live ================= -->
+  <section>
+    <div class="hero-head">
+      <div class="eyebrow"><span id="modeLabel">time 30 · english</span></div>
+      <div class="elapsed" id="elapsed">0.0s</div>
+    </div>
+    <div class="hero">
+      <div>
+        <div class="big"><span class="num" id="lWpm">0</span><span class="unit">wpm</span></div>
+        <div class="target-line"><span>target <b id="tWpm">—</b></span><span class="delta" id="dWpm"></span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="sRaw">—</div><div class="k"><span>Raw speed</span><span id="kRaw">target —</span></div></div>
+        <div class="stat"><div class="v" id="sAcc">—</div><div class="k"><span>Accuracy</span><span id="kAcc">target —</span></div></div>
+        <div class="stat"><div class="v" id="sCon">—</div><div class="k"><span>Consistency</span><span id="kCon">target —</span></div></div>
+        <div class="stat"><div class="v" id="sKeys">0</div><div class="k"><span>Keystrokes</span><span id="kKeys">0 typos</span></div></div>
+      </div>
+    </div>
+
+    <div class="term">
+      <div class="bar-track"><div class="bar-fill" id="prog"></div></div>
+      <div class="term-bar"><span>~/monkebot <b>live</b></span><span id="termState">waiting</span></div>
+      <div class="ticker" id="ticker"></div>
+      <div class="chart"><canvas id="chart"></canvas></div>
+      <div class="term-foot"><span>raw wpm per second</span><span><b id="fLeft">0</b> words left with errors</span></div>
+    </div>
+  </section>
+
+  <!-- ================= controls ================= -->
+  <section>
+    <div class="eyebrow">Configure</div>
+    <div class="controls">
+      <div class="cell">
+        <h3><span class="rn">I.</span>Profile</h3>
+        <p class="sub">How fast, how clean, how human.</p>
+        <div class="presets" id="presets"></div>
+        <div class="sliders">
+          <div class="wide">
+            <div class="ctl-head"><span>Speed range</span><span class="val" id="v_wpm"></span></div>
+            <div class="dual">
+              <div class="track"><div class="fill" id="wpmFill"></div></div>
+              <input type="range" id="wpm_min" min="20" max="400" step="1" aria-label="minimum wpm">
+              <input type="range" id="wpm_max" min="20" max="400" step="1" aria-label="maximum wpm">
+            </div>
+          </div>
+          <div><div class="ctl-head"><span>Accuracy</span><span class="val" id="v_acc"></span></div><input type="range" id="acc" min="80" max="100" step="1"></div>
+          <div><div class="ctl-head"><span>Consistency</span><span class="val" id="v_consistency"></span></div><input type="range" id="consistency" min="40" max="100" step="1"></div>
+          <div><div class="ctl-head"><span>Raw gap</span><span class="val" id="v_raw_gap"></span></div><input type="range" id="raw_gap" min="0" max="30" step="1"></div>
+          <div><div class="ctl-head"><span>Warm-up</span><span class="val" id="v_warmup"></span></div><input type="range" id="warmup" min="0" max="10" step="1"></div>
+          <div><div class="ctl-head"><span>Fatigue</span><span class="val" id="v_fatigue"></span></div><input type="range" id="fatigue" min="0" max="20" step="1"></div>
+        </div>
+      </div>
+
+      <div class="cell">
+        <h3><span class="rn">II.</span>Test</h3>
+        <p class="sub">What Monkeytype shows the bot.</p>
+        <div class="group"><span class="group-l">mode</span><div class="opts" id="modeOpts"></div></div>
+        <div class="group"><span class="group-l">length</span><div class="opts mono" id="amountOpts"></div></div>
+        <div class="row2">
+          <div>
+            <label class="group-l" for="language">language</label>
+            <input class="text" id="language" list="langs" value="english" autocomplete="off" spellcheck="false">
+            <datalist id="langs">
+              <option>english</option><option>english 1k</option><option>english 10k</option>
+              <option>spanish</option><option>french</option><option>german</option>
+              <option>portuguese</option><option>italian</option><option>indonesian</option>
+              <option>code python</option><option>code javascript</option>
+            </datalist>
+          </div>
+          <div>
+            <span class="group-l">runs</span>
+            <div class="stepper"><button id="loopsDown" aria-label="fewer runs">−</button><output id="loops">1</output><button id="loopsUp" aria-label="more runs">+</button></div>
+          </div>
+        </div>
+        <div class="toggles">
+          <label class="toggle">Punctuation<input type="checkbox" id="punctuation"><span class="sw"></span></label>
+          <label class="toggle">Numbers<input type="checkbox" id="numbers"><span class="sw"></span></label>
+          <label class="toggle">Hide browser window<input type="checkbox" id="headless"><span class="sw"></span></label>
+        </div>
+        <div class="actions">
+          <button class="pill" id="go"><span id="goText">Start typing</span><kbd id="goKbd">↵</kbd></button>
+          <button class="pill ghost small" id="closeBrowser" disabled>Close window</button>
+          <span class="hint"><kbd>esc</kbd> stop</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= results ================= -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">Results <b id="resCount"></b></div>
+      <button class="linkbtn" id="clear" title="Hides them here; results.jsonl keeps everything">clear view</button>
+    </div>
+    <div class="table" id="results"></div>
+    <details>
+      <summary><span>Console</span><span class="last" id="lastLog"></span></summary>
+      <pre class="log" id="log"></pre>
+    </details>
+  </section>
+
+  <footer><span>monkebot · guest sessions only · nothing is saved to an account</span><span>results.jsonl keeps every run</span></footer>
+</div>
+
+<script>
+const PRESETS = {
+  casual:  {wpm_min: 70,  wpm_max: 85,  raw_gap: 4, acc: 93,  consistency: 65,  warmup: 3, fatigue: 6},
+  average: {wpm_min: 95,  wpm_max: 110, raw_gap: 3, acc: 95,  consistency: 70,  warmup: 2, fatigue: 5},
+  fast:    {wpm_min: 135, wpm_max: 150, raw_gap: 2, acc: 96,  consistency: 75,  warmup: 2, fatigue: 4},
+  pro:     {wpm_min: 185, wpm_max: 205, raw_gap: 1, acc: 98,  consistency: 80,  warmup: 1, fatigue: 3},
+  robot:   {wpm_min: 200, wpm_max: 200, raw_gap: 0, acc: 100, consistency: 100, warmup: 0, fatigue: 0},
+};
+const LENGTHS = { time: ["15", "30", "60", "120"], words: ["10", "25", "50", "100"],
+                  quote: ["all", "short", "medium", "long", "thicc"] };
+const DEFAULT_LEN = { time: "30", words: "25", quote: "short" };
+const SLIDERS = ["wpm_min", "wpm_max", "raw_gap", "acc", "consistency", "warmup", "fatigue"];
+const $ = id => document.getElementById(id);
+const SAVE_KEY = "monkebot-panel";
+let mode = "time", amount = "30", loops = 1, loading = true;
+
+/* ---------- controls ---------- */
+const pct = el => (el.value - el.min) / (el.max - el.min) * 100;
+function paint() {
+  for (const id of ["acc", "consistency", "raw_gap", "warmup", "fatigue"]) $(id).style.setProperty("--p", pct($(id)) + "%");
+  const a = pct($("wpm_min")), b = pct($("wpm_max"));
+  $("wpmFill").style.left = a + "%"; $("wpmFill").style.width = (b - a) + "%";
+  const lo = $("wpm_min").value, hi = $("wpm_max").value;
+  $("v_wpm").innerHTML = (lo === hi ? lo : `${lo}<i>–</i>${hi}`) + " <i>wpm</i>";
+  $("v_acc").innerHTML = `${$("acc").value}<i>%</i>`;
+  $("v_consistency").innerHTML = `${$("consistency").value}<i>%</i>`;
+  $("v_raw_gap").innerHTML = `+${$("raw_gap").value} <i>wpm</i>`;
+  $("v_warmup").innerHTML = `${$("warmup").value}<i>s</i>`;
+  $("v_fatigue").innerHTML = `${$("fatigue").value}<i>%</i>`;
+  for (const c of document.querySelectorAll("#presets .chip")) {
+    const p = PRESETS[c.dataset.name];
+    c.classList.toggle("on", SLIDERS.every(k => +$(k).value === p[k]));
+  }
+  if (!running) $("modeLabel").textContent = `${mode} ${amount} · ${$("language").value.trim() || "english"}`;
+}
+$("wpm_min").addEventListener("input", () => { if (+$("wpm_min").value > +$("wpm_max").value) $("wpm_max").value = $("wpm_min").value; });
+$("wpm_max").addEventListener("input", () => { if (+$("wpm_max").value < +$("wpm_min").value) $("wpm_min").value = $("wpm_max").value; });
+for (const id of SLIDERS) $(id).addEventListener("input", () => { paint(); save(); });
+
+for (const [name, p] of Object.entries(PRESETS)) {
+  const c = document.createElement("button");
+  c.className = "chip"; c.dataset.name = name;
+  c.innerHTML = `${name} <small>${p.wpm_min === p.wpm_max ? p.wpm_min : Math.round((p.wpm_min + p.wpm_max) / 2)}</small>`;
+  c.onclick = () => { for (const k of SLIDERS) $(k).value = p[k]; paint(); save(); };
+  $("presets").appendChild(c);
+}
+
+function opts(el, items, current, onPick) {
+  el.innerHTML = "";
+  for (const v of items) {
+    const b = document.createElement("button");
+    b.className = "chip" + (v === current ? " on" : "");
+    b.textContent = v; b.onclick = () => onPick(v);
+    el.appendChild(b);
+  }
+}
+function renderTest() {
+  opts($("modeOpts"), Object.keys(LENGTHS), mode, v => { mode = v; amount = DEFAULT_LEN[v]; renderTest(); save(); });
+  opts($("amountOpts"), LENGTHS[mode], amount, v => { amount = v; renderTest(); save(); });
+  $("punctuation").disabled = $("numbers").disabled = mode === "quote";
+  $("loops").textContent = loops;
+  paint();
+}
+$("loopsDown").onclick = () => { loops = Math.max(1, loops - 1); renderTest(); save(); };
+$("loopsUp").onclick = () => { loops = Math.min(50, loops + 1); renderTest(); save(); };
+["language", "punctuation", "numbers", "headless"].forEach(id => $(id).addEventListener("change", () => { paint(); save(); }));
+$("language").addEventListener("input", paint);
+
+function settings() {
+  const s = {};
+  for (const k of SLIDERS) s[k] = +$(k).value;
+  s.mode = mode; s.amount = amount; s.loops = loops;
+  s.language = $("language").value.trim() || "english";
+  for (const k of ["punctuation", "numbers", "headless"]) s[k] = $(k).checked;
+  return s;
+}
+function save() { if (loading) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(settings())); } catch {} }
+
+let running = false;
+(function load() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch {}
+  for (const k of SLIDERS) $(k).value = PRESETS.fast[k];
+  if (s) {
+    for (const k of SLIDERS) if (k in s) $(k).value = s[k];
+    if (LENGTHS[s.mode]) { mode = s.mode; amount = LENGTHS[mode].includes(s.amount) ? s.amount : DEFAULT_LEN[mode]; }
+    if (s.language) $("language").value = s.language;
+    if (s.loops) loops = Math.max(1, Math.min(50, +s.loops || 1));
+    for (const k of ["punctuation", "numbers", "headless"]) $(k).checked = !!s[k];
+  }
+  renderTest();
+  loading = false;
+})();
+
+/* ---------- actions ---------- */
+async function toggleRun() {
+  if (running) { await fetch("/stop", { method: "POST" }); return; }
+  await fetch("/start", { method: "POST", body: JSON.stringify(settings()) });
+  poll();
+}
+$("go").onclick = toggleRun;
+$("navGo").onclick = toggleRun;
+$("closeBrowser").onclick = async () => { await fetch("/close", { method: "POST" }); poll(); };
+$("clear").onclick = async () => { await fetch("/clear", { method: "POST" }); poll(); };
+addEventListener("keydown", e => {
+  const el = document.activeElement;
+  const typing = el.tagName === "INPUT" && el.type !== "range" && el.type !== "checkbox";
+  if (e.key === "Enter" && !typing && !running && el.tagName !== "BUTTON") { e.preventDefault(); toggleRun(); }
+  if (e.key === "Escape" && running) toggleRun();
+});
+
+/* clock */
+const two = n => String(n).padStart(2, "0");
+function clock() { const d = new Date(); $("clock").textContent = `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`; }
+clock(); setInterval(clock, 1000);
+
+/* ---------- live view ---------- */
+const deltaCls = (a, t) => Math.abs(a - t) <= Math.max(3, t * 0.05) ? "ok" : "off";
+function signed(n) { n = Math.round(n); return (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function renderTicker(p) {
+  const el = $("ticker");
+  if (!p || (!p.current && !(p.recent || []).length)) {
+    el.innerHTML = `<span class="ph">${running ? "opening monkeytype…" : "press ↵ to start typing"}</span>`;
+    return;
+  }
+  const words = (p.recent || []).map(([w, ok]) => `<span class="w${ok ? "" : " bad"}">${esc(w)}</span>`).join("");
+  let cur = "";
+  if (running && p.current) {
+    cur = `<span class="cur"><b>${esc(p.current.slice(0, p.in_word))}</b><span class="caret"></span>${esc(p.current.slice(p.in_word))}</span>`;
+  }
+  el.innerHTML = words + cur;
+}
+
+let chartKey = "";
+function drawChart(hist, target, force) {
+  const key = hist.length + ":" + (hist.at(-1) || 0) + ":" + target;
+  if (key === chartKey && !force) return;               // only redraw when data changes
+  chartKey = key;
+  const c = $("chart"), dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = c.clientWidth, h = c.clientHeight;
+  if (!w) return;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  const top = Math.max(target * 1.45, ...hist, 60), padY = 8, padL = 34;
+  const y = v => h - 18 - (v / top) * (h - 18 - padY);
+  g.font = "11px 'JetBrains Mono', monospace"; g.textBaseline = "middle";
+  // horizontal guides with labels
+  for (const f of [0, .5, 1]) {
+    const v = Math.round(top * f / 10) * 10, yy = Math.round(y(v)) + .5;
+    g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(padL, yy); g.lineTo(w, yy); g.stroke();
+    g.fillStyle = "rgba(255,255,255,.35)"; g.fillText(v, 0, yy);
+  }
+  if (target) {
+    const ty = Math.round(y(target)) + .5;
+    g.strokeStyle = "rgba(255,255,255,.55)"; g.setLineDash([2, 4]);
+    g.beginPath(); g.moveTo(padL, ty); g.lineTo(w, ty); g.stroke(); g.setLineDash([]);
+    g.fillStyle = "#fff"; g.textAlign = "right"; g.fillText("target " + Math.round(target), w, ty - 10); g.textAlign = "left";
+  }
+  const n = Math.max(hist.length - 1, 14), x = i => padL + (i / n) * (w - padL - 4);
+  if (hist.length > 1) {
+    g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.lineJoin = "round";
+    g.beginPath();
+    hist.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v)));
+    g.stroke();
+    const lx = x(hist.length - 1), ly = y(hist.at(-1));
+    g.fillStyle = "#fff"; g.fillRect(lx - 3, ly - 3, 6, 6);
+  }
+  g.fillStyle = "rgba(255,255,255,.35)"; g.textAlign = "left";
+  g.fillText("0s", padL, h - 6);
+  if (hist.length) { g.textAlign = "right"; g.fillText(hist.length + "s", w, h - 6); g.textAlign = "left"; }
+}
+
+let resultsKey = "";
+function render(st) {
+  running = st.running;
+  const p = st.progress, t = st.target, last = st.results.at(-1);
+
+  $("dot").className = "dot " + (running ? "on" : st.browser ? "idle" : "");
+  $("statusText").textContent = running ? "Typing" : st.browser ? "Window open" : "Idle";
+  for (const [btn, txt] of [["go", "goText"], ["navGo", "navGoText"]]) {
+    $(btn).classList.toggle("stop", running);
+    $(txt).textContent = running ? "Stop" : "Start typing";
+  }
+  $("goKbd").textContent = running ? "esc" : "↵";
+  $("closeBrowser").disabled = !st.browser || running;
+  $("termState").textContent = running ? "typing" : st.browser ? "window open · idle" : "waiting";
+
+  if (running && t) $("modeLabel").textContent = `${t.mode} · ${$("language").value.trim() || "english"}`;
+  else paint();
+
+  const wpm = p && p.wpm != null ? p.wpm : null;
+  $("lWpm").textContent = wpm != null ? Math.round(wpm) : (last && !running ? last.wpm : "0");
+  $("tWpm").textContent = t ? Math.round(t.wpm) : "—";
+  const d = $("dWpm");
+  if (t && wpm != null) { d.textContent = signed(wpm - t.wpm); d.className = "delta " + deltaCls(wpm, t.wpm); }
+  else d.textContent = "";
+  $("elapsed").textContent = ((p && p.elapsed) || 0).toFixed(1) + "s";
+  $("prog").style.width = ((p && p.progress) || 0) * 100 + "%";
+
+  const finished = !running && last && t;
+  $("sRaw").textContent = p && p.raw != null ? Math.round(p.raw) : "—";
+  $("kRaw").textContent = t ? "target " + Math.round(t.raw) : "target —";
+  $("sAcc").innerHTML = p && p.acc != null ? Math.round(p.acc) + "<small>%</small>" : "—";
+  $("kAcc").textContent = t ? "target " + t.acc + "%" : "target —";
+  $("sCon").innerHTML = finished ? parseFloat(last.consistency) + "<small>%</small>" : (running ? "…" : "—");
+  $("kCon").textContent = t ? "target " + t.consistency + "%" : "target —";
+  $("sKeys").textContent = p ? p.keys : 0;
+  $("kKeys").textContent = (p ? p.typos : 0) + " typos";
+  $("fLeft").textContent = p ? (p.left_wrong || 0) : 0;
+
+  renderTicker(p);
+  drawChart((p && p.history) || [], t ? t.wpm : 0);
+
+  // results
+  const rk = st.results.length + ":" + (last ? last.time : "");
+  if (rk !== resultsKey) {
+    resultsKey = rk;
+    $("resCount").textContent = st.results.length ? `(${st.results.length})` : "";
+    const head = `<div class="tr th"><span>#</span><span class="what">Test</span><span>wpm</span><span>raw</span><span>acc</span><span>consistency</span></div>`;
+    const cell = (v, tv, unit = "") => {
+      const a = parseFloat(v);
+      if (isNaN(a)) return `<div class="m"><b>${esc(v)}</b></div>`;
+      return `<div class="m"><b>${a}</b><span class="t">/${tv}${unit}</span><span class="delta ${deltaCls(a, +tv)}">${signed(a - tv)}</span></div>`;
+    };
+    const rows = st.results.map((r, i) => {
+      const s = r.settings || {}, tg = r.target;
+      const name = s.mode ? `${s.mode} ${s.amount}` : "test";
+      const sub = [s.language, r.time ? r.time.slice(11, 16) : ""].filter(Boolean).join(" · ");
+      return `<div class="tr"><span class="n">${String(i + 1).padStart(2, "0")}</span>
+        <div class="what"><div>${esc(name)}</div><small>${esc(sub)}</small></div>
+        ${cell(r.wpm, tg.wpm)}${cell(r.raw, tg.raw)}${cell(r.acc, +tg.acc, "%")}${cell(r.consistency, +tg.consistency, "%")}</div>`;
+    }).reverse();
+    $("results").innerHTML = rows.length ? head + rows.join("") : `<div class="empty">No runs yet. Results land here, target vs actual.</div>`;
+  }
+
+  $("log").textContent = st.log.join("\n");
+  $("log").scrollTop = $("log").scrollHeight;
+  $("lastLog").textContent = st.log.at(-1) || "";
+}
+
+let timer = null;
+async function poll() {
+  clearTimeout(timer);
+  try { render(await (await fetch("/status")).json()); } catch {}
+  timer = setTimeout(poll, running ? 150 : 1500);
+}
+poll();
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { chartKey = ""; poll(); }, 150); });
+</script>
+</body>
+</html>
