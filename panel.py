@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local control panel for monkebot.
+"""Local control panel for ghostkeys.
 
     .venv/bin/python panel.py          # then open http://127.0.0.1:8765
 
@@ -115,7 +115,7 @@ def ensure_worker() -> None:
     if worker is not None and worker.poll() is None:
         return
     worker = subprocess.Popen(
-        [sys.executable, "-u", str(HERE / "monkebot.py"), "--serve"],
+        [sys.executable, "-u", str(HERE / "ghostkeys.py"), "--serve"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, cwd=HERE)
     threading.Thread(target=pump, args=(worker,), daemon=True).start()
@@ -181,7 +181,7 @@ def shutdown() -> None:
 
 if __name__ == "__main__":
     load_history()
-    print(f"monkebot panel on http://127.0.0.1:{PORT}  (Ctrl-C to quit)")
+    print(f"ghostkeys panel on http://127.0.0.1:{PORT}  (Ctrl-C to quit)")
     try:
         ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
     except KeyboardInterrupt:

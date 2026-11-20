@@ -24,9 +24,9 @@ Display:
   --menu         ask for every setting interactively
 
 Examples:
-  .venv/bin/python monkebot.py --preset fast --mode "time 30"
-  .venv/bin/python monkebot.py --wpm 130-145 --acc 95 --mode "quote medium" --language spanish
-  .venv/bin/python monkebot.py --menu
+  .venv/bin/python ghostkeys.py --preset fast --mode "time 30"
+  .venv/bin/python ghostkeys.py --wpm 130-145 --acc 95 --mode "quote medium" --language spanish
+  .venv/bin/python ghostkeys.py --menu
 """
 import argparse
 import json
@@ -184,7 +184,7 @@ def dashboard(t, label: str):
         bar, Text(f"{s['elapsed']:.1f}s · {s['keys']} keys · {s['typos']} typos "
                   f"({s['left_wrong']} left in)", style="dim"),
     )
-    return Panel(body, title=f"monkebot · {label}", border_style="cyan", width=60)
+    return Panel(body, title=f"ghostkeys · {label}", border_style="cyan", width=60)
 
 
 # ---------------------------------------------------------------- page

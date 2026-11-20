@@ -1,4 +1,4 @@
-# monkebot
+# ghostkeys
 
 A Playwright bot that types [Monkeytype](https://monkeytype.com) tests with
 human-like stats you control: WPM, raw, accuracy, consistency, warm-up and fatigue.
@@ -30,10 +30,10 @@ chart. One Monkeytype window stays open between runs. Every result is appended t
 ## Command line
 
 ```bash
-.venv/bin/python monkebot.py --preset fast --mode "time 30"
-.venv/bin/python monkebot.py --wpm 130-145 --raw-gap 3 --acc 95 --consistency 72 --loops 3
-.venv/bin/python monkebot.py --mode "quote medium" --language spanish
-.venv/bin/python monkebot.py --menu            # answer prompts instead of flags
+.venv/bin/python ghostkeys.py --preset fast --mode "time 30"
+.venv/bin/python ghostkeys.py --wpm 130-145 --raw-gap 3 --acc 95 --consistency 72 --loops 3
+.venv/bin/python ghostkeys.py --mode "quote medium" --language spanish
+.venv/bin/python ghostkeys.py --menu            # answer prompts instead of flags
 ```
 
 In a terminal it shows a live dashboard. Add `--ui plain` for plain text.
