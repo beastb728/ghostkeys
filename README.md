@@ -101,7 +101,7 @@ flowchart LR
     D -->|counted chars vs. plan| D
 ```
 
-| | |
+| Piece | How |
 |---|---|
 | **Real keystrokes** | Playwright reads the active word *and its index in one call* (reading them separately raced the page and retyped words), then sends trusted key events. |
 | **WPM on target** | Keystrokes run on a clock. A feedback loop compares counted characters to where they should be and speeds up or slows down. |
