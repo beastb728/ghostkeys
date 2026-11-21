@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ghostkeys</title>
+<meta name="description" content="A Playwright bot that types Monkeytype tests with human-like stats you control. Guest-only. Try the in-browser demo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #121211; --paper: #171716; --field: #0f0f0e; --term: #0a0a09;
+    --ink: #ecebe5; --ink-2: #c9c8c1; --muted: #8e8d86; --faint: #5f5e59;
+    --line: #232321; --line-2: #30302d; --on-ink: #121211;
+    --ok: #6fcf8e; --off: #e8b45a; --bad: #f0806a;
+    --sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --serif: "Instrument Serif", ui-serif, Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; scroll-behavior: smooth; }
+  body {
+    margin: 0; color: var(--ink); font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased;
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size: 72px 72px;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
+  @media (max-width: 640px) { .wrap { padding: 0 16px; } }
+
+  /* nav */
+  nav {
+    position: sticky; top: 12px; z-index: 5; margin: 12px auto 0; max-width: 1160px;
+    display: flex; align-items: center; gap: 22px; padding: 8px 8px 8px 20px;
+    background: rgba(23,23,22,.94); border: 1px solid var(--line-2); border-radius: 999px;
+  }
+  @media (max-width: 1240px) { nav { margin: 12px 16px 0; } }
+  .brand { font: 400 20px var(--sans); letter-spacing: -.03em; display: flex; align-items: flex-start; gap: 5px; text-decoration: none; }
+  .brand sup { font: 500 9px var(--mono); color: var(--muted); letter-spacing: .06em; margin-top: 4px; text-transform: uppercase; }
+  .links { display: flex; gap: 22px; margin: 0 auto; }
+  .links a { font-size: 14px; color: var(--muted); text-decoration: none; }
+  .links a:hover { color: var(--ink); }
+  @media (max-width: 760px) { .links { display: none; } nav { justify-content: space-between; } }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 10px; border-radius: 999px; cursor: pointer; text-decoration: none;
+    font: 500 14px var(--sans); padding: 10px 18px; border: 1px solid var(--ink);
+    background: var(--ink); color: var(--on-ink); transition: background .15s; white-space: nowrap;
+  }
+  .pill:hover { background: #fff; }
+  .pill .arr { font-family: var(--mono); font-size: 13px; }
+  .pill.ghost { background: transparent; color: var(--ink); border-color: var(--line-2); }
+  .pill.ghost:hover { border-color: var(--ink); background: transparent; }
+  .pill.stop { background: transparent; color: var(--bad); border-color: var(--bad); }
+  .pill.small { padding: 8px 14px; font-size: 13px; }
+
+  .eyebrow { display: flex; align-items: center; gap: 12px; font: 12px var(--mono); color: var(--muted); }
+  .eyebrow::before { content: ""; width: 28px; height: 1px; background: var(--line-2); }
+  h2 { font: 400 clamp(36px, 5vw, 60px)/1.02 var(--sans); letter-spacing: -.04em; margin: 16px 0 14px; }
+  h2 em, h1 em { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -.01em; }
+  .lede { color: var(--muted); font-size: 18px; max-width: 620px; margin: 0; }
+  section { padding: 96px 0 0; }
+  @media (max-width: 640px) { section { padding-top: 72px; } }
+
+  /* hero */
+  .hero { padding-top: 88px; }
+  h1 { font: 400 clamp(64px, 11vw, 150px)/.92 var(--sans); letter-spacing: -.055em; margin: 22px 0 28px; }
+  .hero p { font-size: clamp(17px, 2vw, 21px); color: var(--muted); max-width: 640px; margin: 0 0 34px; }
+  .ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+  .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 72px; border-top: 1px solid var(--line-2); }
+  .fact { padding: 22px 20px 0 0; }
+  .fact b { display: block; font: 400 clamp(34px, 4.4vw, 52px)/1 var(--sans); letter-spacing: -.04em; }
+  .fact b small { font: italic 400 .5em var(--serif); color: var(--muted); letter-spacing: 0; }
+  .fact span { display: block; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .fact span i { display: block; font: normal 11px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }
+  @media (max-width: 760px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 26px; } }
+
+  /* demo */
+  .demo-note { display: inline-flex; gap: 8px; align-items: center; font: 12px var(--mono); color: var(--off); border: 1px solid rgba(232,180,90,.3); border-radius: 999px; padding: 4px 12px; margin-top: 18px; }
+  .live-head { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; gap: 12px; }
+  .elapsed { font: 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .live { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 540px); gap: 40px; align-items: end; margin-top: 18px; }
+  @media (max-width: 1000px) { .live { grid-template-columns: 1fr; gap: 28px; } }
+  .big { display: flex; align-items: baseline; gap: 14px; }
+  .big .num { font: 400 clamp(100px, 15vw, 200px)/.82 var(--sans); letter-spacing: -.065em; font-variant-numeric: tabular-nums; }
+  .big .unit { font: italic 400 clamp(30px, 4vw, 46px)/1 var(--serif); color: var(--muted); }
+  .target-line { margin-top: 20px; display: flex; gap: 14px; font: 13px var(--mono); color: var(--muted); }
+  .target-line b { color: var(--ink); font-weight: 500; }
+  .delta { font: 500 12px var(--mono); }
+  .delta.ok { color: var(--ok); } .delta.off { color: var(--off); }
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line-2); border-left: 1px solid var(--line-2); background: var(--paper); }
+  .stat { padding: 18px 20px 16px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); min-width: 0; }
+  .stat .v { font: 400 44px/1 var(--sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .stat .v small { font: italic 400 22px var(--serif); color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+  .stat .k { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .stat .k span:last-child { font: 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--faint); white-space: nowrap; }
+  @media (max-width: 520px) { .stat .v { font-size: 34px; } .stat { padding: 14px; } }
+
+  .term {
+    margin-top: 32px; background-color: var(--term); color: #f2f2ee; border-radius: 4px; overflow: hidden; position: relative;
+    border: 1px solid var(--line-2);
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 1px, transparent 1px 9px);
+  }
+  .term-bar { display: flex; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,.09); font: 12px var(--mono); color: rgba(255,255,255,.5); }
+  .term-bar b { color: #fff; font-weight: 400; }
+  .bar-track { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: rgba(255,255,255,.08); }
+  .bar-fill { height: 100%; width: 0; background: #fff; }
+  .ticker {
+    height: 64px; display: flex; align-items: center; justify-content: flex-end; padding: 0 22px;
+    font: 400 22px var(--mono); white-space: nowrap; overflow: hidden; border-bottom: 1px solid rgba(255,255,255,.09);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 40%); mask-image: linear-gradient(90deg, transparent, #000 40%);
+  }
+  .ticker .w { margin-left: .6em; color: rgba(255,255,255,.28); }
+  .ticker .w.bad { color: #fb923c; text-decoration: line-through; text-decoration-thickness: 1px; }
+  .ticker .cur { margin-left: .6em; color: rgba(255,255,255,.35); }
+  .ticker .cur b { color: #fff; font-weight: 400; }
+  .ticker .cur s { color: #fb923c; text-decoration: none; }
+  .caret { display: inline-block; width: 2px; height: 1em; vertical-align: -3px; background: #fff; animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  .ticker .ph { font-size: 14px; color: rgba(255,255,255,.45); }
+  .chart { padding: 14px 18px 12px; }
+  canvas { width: 100%; height: 190px; display: block; }
+  .term-foot { display: flex; justify-content: space-between; padding: 0 18px 14px; font: 11px var(--mono); color: rgba(255,255,255,.45); gap: 12px; flex-wrap: wrap; }
+  .term-foot b { color: #fff; font-weight: 400; }
+
+  .controls { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); border: 1px solid var(--line-2); background: var(--paper); margin-top: 24px; }
+  @media (max-width: 900px) { .controls { grid-template-columns: 1fr; } }
+  .cell { padding: 26px 28px; min-width: 0; }
+  .cell + .cell { border-left: 1px solid var(--line-2); }
+  @media (max-width: 900px) { .cell + .cell { border-left: 0; border-top: 1px solid var(--line-2); } }
+  @media (max-width: 520px) { .cell { padding: 20px 16px; } }
+  .cell h3 { margin: 0 0 4px; font: 400 26px var(--sans); letter-spacing: -.03em; display: flex; align-items: baseline; gap: 12px; }
+  .cell h3 .rn { font: 13px var(--mono); color: var(--faint); }
+  .cell p.sub { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+  .chip {
+    display: inline-flex; align-items: baseline; gap: 7px; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line-2); background: transparent; color: var(--ink); font: 400 13.5px var(--sans);
+  }
+  .chip small { font: 11px var(--mono); color: var(--faint); }
+  .chip:hover { border-color: var(--ink); }
+  .chip.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .chip.on small { color: rgba(0,0,0,.5); }
+  .chip:disabled { opacity: .4; cursor: default; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 32px; }
+  .sliders .wide { grid-column: 1 / -1; }
+  @media (max-width: 560px) { .sliders { grid-template-columns: 1fr; } }
+  .ctl-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .ctl-head span { font-size: 14px; color: var(--ink-2); }
+  .val { font: 13px var(--mono); font-variant-numeric: tabular-nums; }
+  .val i { font-style: normal; color: var(--faint); }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; margin: 0; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(90deg, var(--ink) var(--p, 50%), var(--line-2) var(--p, 50%)); }
+  input[type=range]::-moz-range-track { height: 2px; background: var(--line-2); }
+  input[type=range]::-moz-range-progress { height: 2px; background: var(--ink); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%; background: var(--paper); border: 1.5px solid var(--ink); }
+  input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--paper); border: 1.5px solid var(--ink); }
+  input[type=range]:focus-visible { outline: none; }
+  input[type=range]:focus-visible::-webkit-slider-thumb { background: var(--ink); }
+  .dual { position: relative; height: 16px; }
+  .dual .track { position: absolute; left: 0; right: 0; top: 7px; height: 2px; background: var(--line-2); }
+  .dual .fill { position: absolute; top: 0; bottom: 0; background: var(--ink); }
+  .dual input { position: absolute; inset: 0; pointer-events: none; }
+  .dual input::-webkit-slider-runnable-track { background: transparent; }
+  .dual input::-moz-range-track { background: transparent; }
+  .dual input::-moz-range-progress { background: transparent; }
+  .dual input::-webkit-slider-thumb { pointer-events: auto; }
+  .dual input::-moz-range-thumb { pointer-events: auto; }
+  .group { margin-bottom: 20px; }
+  .group-l { font: 12px var(--mono); color: var(--muted); margin-bottom: 9px; display: block; }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .opts .chip { padding: 6px 13px; }
+  .opts.mono .chip { font: 12.5px var(--mono); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 26px; }
+  .actions .hint { font: 12px var(--mono); color: var(--faint); }
+  .sim-note { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; margin: 4px 0 0; }
+
+  /* how it works */
+  .how { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--line-2); border-left: 1px solid var(--line-2); margin-top: 44px; }
+  .how > div { padding: 24px 22px 26px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); background: var(--paper); }
+  .how .rn { font: 13px var(--mono); color: var(--faint); }
+  .how h4 { font: 400 22px var(--sans); letter-spacing: -.02em; margin: 18px 0 10px; }
+  .how p { margin: 0; color: var(--muted); font-size: 14px; }
+  @media (max-width: 1000px) { .how { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .how { grid-template-columns: 1fr; } }
+
+  /* results */
+  .table { margin-top: 36px; border-top: 1px solid var(--line-2); }
+  .tr { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr)); gap: 12px; align-items: baseline; padding: 16px 4px; border-bottom: 1px solid var(--line); }
+  .tr.th { font: 11px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .06em; padding: 12px 4px; }
+  .tr .what div { font-size: 15px; }
+  .tr .what small { font: 11px var(--mono); color: var(--faint); }
+  .m b { font: 400 26px/1 var(--sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .m .t { font: 11px var(--mono); color: var(--faint); margin-left: 4px; }
+  .m .delta { display: block; margin-top: 6px; font-size: 11px; }
+  @media (max-width: 700px) {
+    .tr { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .tr .what { grid-column: 1 / -1; }
+    .tr.th .what { display: none; }
+    .m b { font-size: 21px; }
+    .m .t { display: none; }
+  }
+  .fine { margin-top: 18px; font: 12px var(--mono); color: var(--faint); }
+
+  /* run it */
+  .runit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 48px; align-items: start; }
+  @media (max-width: 900px) { .runit { grid-template-columns: 1fr; gap: 28px; } }
+  pre.code {
+    margin: 0; background-color: var(--term); border: 1px solid var(--line-2); border-radius: 4px; padding: 20px 22px;
+    font: 13px/1.9 var(--mono); color: #e5e4de; overflow-x: auto;
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.03) 0 1px, transparent 1px 9px);
+  }
+  pre.code .c { color: rgba(255,255,255,.38); }
+  .notes { list-style: none; padding: 0; margin: 26px 0 0; border-top: 1px solid var(--line); }
+  .notes li { padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 14px; display: flex; gap: 14px; }
+  .notes li b { font: 12px var(--mono); color: var(--faint); font-weight: 400; min-width: 22px; }
+
+  footer { margin: 110px 0 0; padding: 20px 0 32px; border-top: 1px solid var(--line-2); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font: 12px var(--mono); color: var(--faint); }
+  footer a { color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .caret { animation: none; } }
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="#">ghostkeys<sup>guest</sup></a>
+  <div class="links"><a href="#demo">Demo</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#run">Run it</a></div>
+  <a class="pill small" href="https://github.com/beastb728/ghostkeys" target="_blank" rel="noopener">GitHub <span class="arr">→</span></a>
+</nav>
+
+<div class="wrap">
+  <!-- hero -->
+  <header class="hero">
+    <div class="eyebrow">A typing bot for Monkeytype · guest only</div>
+    <h1>Type like<br>a <em>ghost.</em></h1>
+    <p>ghostkeys drives a real browser through Monkeytype tests and hits the stats you ask for: speed, raw, accuracy and consistency, with a warm-up and fatigue curve that looks like a person typing.</p>
+    <div class="ctas">
+      <a class="pill" href="#demo">Try the demo <span class="arr">↓</span></a>
+      <a class="pill ghost" href="https://github.com/beastb728/ghostkeys" target="_blank" rel="noopener">View source <span class="arr">→</span></a>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>±5<small>%</small></b><span>typical WPM error<i>30s+ tests</i></span></div>
+      <div class="fact"><b>251</b><span>WPM hit for a 250 target<i>99% accuracy</i></span></div>
+      <div class="fact"><b>6</b><span>stats you control<i>plus 5 presets</i></span></div>
+      <div class="fact"><b>0</b><span>accounts touched<i>fresh guest browser</i></span></div>
+    </div>
+  </header>
+
+  <!-- demo -->
+  <section id="demo">
+    <div class="eyebrow">Demo</div>
+    <h2>Set the numbers.<br>Watch it <em>type.</em></h2>
+    <p class="lede">This runs a simulation of the bot in your browser, with the same pacing, typo and consistency logic the real one uses. Nothing here connects to Monkeytype.</p>
+    <span class="demo-note">● simulated · no network, no bot</span>
+
+    <div class="live-head">
+      <div class="eyebrow"><span id="modeLabel">time 30 · simulated</span></div>
+      <div class="elapsed" id="elapsed">0.0s</div>
+    </div>
+    <div class="live">
+      <div>
+        <div class="big"><span class="num" id="lWpm">0</span><span class="unit">wpm</span></div>
+        <div class="target-line"><span>target <b id="tWpm">—</b></span><span class="delta" id="dWpm"></span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="sRaw">—</div><div class="k"><span>Raw speed</span><span id="kRaw">target —</span></div></div>
+        <div class="stat"><div class="v" id="sAcc">—</div><div class="k"><span>Accuracy</span><span id="kAcc">target —</span></div></div>
+        <div class="stat"><div class="v" id="sCon">—</div><div class="k"><span>Consistency</span><span id="kCon">target —</span></div></div>
+        <div class="stat"><div class="v" id="sKeys">0</div><div class="k"><span>Keystrokes</span><span id="kKeys">0 typos</span></div></div>
+      </div>
+    </div>
+    <div class="term">
+      <div class="bar-track"><div class="bar-fill" id="prog"></div></div>
+      <div class="term-bar"><span>~/ghostkeys <b>demo</b></span><span id="termState">ready</span></div>
+      <div class="ticker" id="ticker"><span class="ph">press start typing below</span></div>
+      <div class="chart"><canvas id="chart"></canvas></div>
+      <div class="term-foot"><span>raw wpm per second</span><span><b id="fLeft">0</b> words left with errors</span></div>
+    </div>
+
+    <div class="controls">
+      <div class="cell">
+        <h3><span class="rn">I.</span>Profile</h3>
+        <p class="sub">How fast, how clean, how human.</p>
+        <div class="presets" id="presets"></div>
+        <div class="sliders">
+          <div class="wide">
+            <div class="ctl-head"><span>Speed range</span><span class="val" id="v_wpm"></span></div>
+            <div class="dual">
+              <div class="track"><div class="fill" id="wpmFill"></div></div>
+              <input type="range" id="wpm_min" min="20" max="300" step="1" aria-label="minimum wpm">
+              <input type="range" id="wpm_max" min="20" max="300" step="1" aria-label="maximum wpm">
+            </div>
+          </div>
+          <div><div class="ctl-head"><span>Accuracy</span><span class="val" id="v_acc"></span></div><input type="range" id="acc" min="80" max="100" step="1"></div>
+          <div><div class="ctl-head"><span>Consistency</span><span class="val" id="v_consistency"></span></div><input type="range" id="consistency" min="40" max="100" step="1"></div>
+          <div><div class="ctl-head"><span>Raw gap</span><span class="val" id="v_raw_gap"></span></div><input type="range" id="raw_gap" min="0" max="30" step="1"></div>
+          <div><div class="ctl-head"><span>Warm-up</span><span class="val" id="v_warmup"></span></div><input type="range" id="warmup" min="0" max="10" step="1"></div>
+          <div><div class="ctl-head"><span>Fatigue</span><span class="val" id="v_fatigue"></span></div><input type="range" id="fatigue" min="0" max="20" step="1"></div>
+        </div>
+      </div>
+      <div class="cell">
+        <h3><span class="rn">II.</span>Test</h3>
+        <p class="sub">A short test so you don't wait long.</p>
+        <div class="group"><span class="group-l">mode</span><div class="opts" id="modeOpts"></div></div>
+        <div class="group"><span class="group-l">length</span><div class="opts mono" id="amountOpts"></div></div>
+        <p class="sim-note">The real bot also does quotes, punctuation, numbers and any Monkeytype language, and runs from a local control panel just like this one.</p>
+        <div class="actions">
+          <button class="pill" id="go"><span id="goText">Start typing</span><span class="arr">→</span></button>
+          <span class="hint">results are simulated</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- how -->
+  <section id="how">
+    <div class="eyebrow">How it works</div>
+    <h2>Four numbers,<br>one <em>feedback loop.</em></h2>
+    <div class="how">
+      <div><span class="rn">I.</span><h4>Real keystrokes</h4><p>Playwright opens a fresh Chromium, reads the active word and its index from the page in a single call, and sends trusted key events. Reading them separately raced the page and retyped words.</p></div>
+      <div><span class="rn">II.</span><h4>WPM on target</h4><p>Keystrokes run on a clock, and a feedback loop compares counted characters to where they should be, so typo overhead and browser latency don't drag the score down.</p></div>
+      <div><span class="rn">III.</span><h4>Consistency</h4><p>Monkeytype's consistency formula is inverted to find the speed variation it implies. A per-second speed profile with warm-up and fatigue is scaled to exactly that, minus the jitter per-key timing already adds.</p></div>
+      <div><span class="rn">IV.</span><h4>Accuracy & raw</h4><p>An error budget decides when to hit a neighbouring key, pause, and backspace it. Raw above WPM comes from occasionally leaving a word wrong, which counts for raw but not WPM.</p></div>
+    </div>
+  </section>
+
+  <!-- results -->
+  <section id="results">
+    <div class="eyebrow">Measured</div>
+    <h2>Target vs. <em>actual.</em></h2>
+    <p class="lede">Real runs against monkeytype.com in guest mode. The number after the slash is what was asked for.</p>
+    <div class="table" id="realResults"></div>
+    <div class="fine">Short tests swing more: a 50-word run overshot by 7%. 30s+ tests usually land within about 5%.</div>
+  </section>
+
+  <!-- run it -->
+  <section id="run">
+    <div class="runit">
+      <div>
+        <div class="eyebrow">Run it yourself</div>
+        <h2>Local by <em>design.</em></h2>
+        <p class="lede">The bot needs a real browser on your machine, so it runs locally instead of on this site. Setup takes a minute.</p>
+        <ul class="notes">
+          <li><b>01</b>Every run uses a fresh guest browser, so nothing is saved to an account or sent to a leaderboard.</li>
+          <li><b>02</b>The control panel keeps one Monkeytype window open between runs, and Stop only stops the typing.</li>
+          <li><b>03</b>Every result is appended to results.jsonl.</li>
+        </ul>
+      </div>
+      <pre class="code"><span class="c"># get it</span>
+git clone https://github.com/beastb728/ghostkeys
+cd ghostkeys
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/playwright install chromium
+
+<span class="c"># control panel → http://127.0.0.1:8765</span>
+.venv/bin/python panel.py
+
+<span class="c"># or the command line</span>
+.venv/bin/python ghostkeys.py --preset fast --mode "time 30"</pre>
+    </div>
+  </section>
+
+  <footer>
+    <span>ghostkeys · built by <a href="https://github.com/beastb728" target="_blank" rel="noopener">beastb728</a></span>
+    <span>guest sessions only · not affiliated with Monkeytype</span>
+  </footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* ---------------- measured results (real guest runs) ---------------- */
+const REAL = [
+  { test: "time 30", note: "casual preset", r: [75, 77, 94, 64], t: [76, 80, 93, 65] },
+  { test: "time 30", note: "fast preset",   r: [152, 153, 96, 74], t: [147, 149, 96, 75] },
+  { test: "time 30", note: "custom profile", r: [119, 133, 93, 60], t: [120, 135, 92, 60] },
+  { test: "time 30", note: "250 wpm",       r: [251, 252, 99, 84], t: [250, 252, 99, 85] },
+  { test: "time 15", note: "spanish",       r: [138, 138, 96, 69], t: [136, 138, 96, 75] },
+  { test: "quote medium", note: "french",   r: [150, 150, 96, 73], t: [149, 151, 96, 75] },
+  { test: "words 50", note: "pro preset",   r: [203, 207, 96, 86], t: [190, 191, 98, 80] },
+];
+const deltaCls = (a, t) => Math.abs(a - t) <= Math.max(3, t * 0.05) ? "ok" : "off";
+const signed = n => { n = Math.round(n); return (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n); };
+(function renderReal() {
+  const cell = (a, t, u = "") => `<div class="m"><b>${a}${u}</b><span class="t">/${t}${u}</span><span class="delta ${deltaCls(a, t)}">${signed(a - t)}</span></div>`;
+  $("realResults").innerHTML = `<div class="tr th"><span class="what">Test</span><span>wpm</span><span>raw</span><span>acc</span><span>consistency</span></div>` +
+    REAL.map(x => `<div class="tr"><div class="what"><div>${x.test}</div><small>${x.note}</small></div>${cell(x.r[0], x.t[0])}${cell(x.r[1], x.t[1])}${cell(x.r[2], x.t[2], "%")}${cell(x.r[3], x.t[3], "%")}</div>`).join("");
+})();
+
+/* ---------------- controls ---------------- */
+const PRESETS = {
+  casual:  {wpm_min: 70,  wpm_max: 85,  raw_gap: 4, acc: 93,  consistency: 65,  warmup: 3, fatigue: 6},
+  average: {wpm_min: 95,  wpm_max: 110, raw_gap: 3, acc: 95,  consistency: 70,  warmup: 2, fatigue: 5},
+  fast:    {wpm_min: 135, wpm_max: 150, raw_gap: 2, acc: 96,  consistency: 75,  warmup: 2, fatigue: 4},
+  pro:     {wpm_min: 185, wpm_max: 205, raw_gap: 1, acc: 98,  consistency: 80,  warmup: 1, fatigue: 3},
+  robot:   {wpm_min: 200, wpm_max: 200, raw_gap: 0, acc: 100, consistency: 100, warmup: 0, fatigue: 0},
+};
+const LENGTHS = { time: ["15", "30"], words: ["10", "25", "50"] };
+const SLIDERS = ["wpm_min", "wpm_max", "raw_gap", "acc", "consistency", "warmup", "fatigue"];
+let mode = "time", amount = "15", running = false;
+
+const pct = el => (el.value - el.min) / (el.max - el.min) * 100;
+function paint() {
+  for (const id of ["acc", "consistency", "raw_gap", "warmup", "fatigue"]) $(id).style.setProperty("--p", pct($(id)) + "%");
+  const a = pct($("wpm_min")), b = pct($("wpm_max"));
+  $("wpmFill").style.left = a + "%"; $("wpmFill").style.width = (b - a) + "%";
+  const lo = $("wpm_min").value, hi = $("wpm_max").value;
+  $("v_wpm").innerHTML = (lo === hi ? lo : `${lo}<i>–</i>${hi}`) + " <i>wpm</i>";
+  $("v_acc").innerHTML = `${$("acc").value}<i>%</i>`;
+  $("v_consistency").innerHTML = `${$("consistency").value}<i>%</i>`;
+  $("v_raw_gap").innerHTML = `+${$("raw_gap").value} <i>wpm</i>`;
+  $("v_warmup").innerHTML = `${$("warmup").value}<i>s</i>`;
+  $("v_fatigue").innerHTML = `${$("fatigue").value}<i>%</i>`;
+  for (const c of document.querySelectorAll("#presets .chip")) {
+    const p = PRESETS[c.dataset.name];
+    c.classList.toggle("on", SLIDERS.every(k => +$(k).value === p[k]));
+  }
+  if (!running) $("modeLabel").textContent = `${mode} ${amount} · simulated`;
+}
+$("wpm_min").addEventListener("input", () => { if (+$("wpm_min").value > +$("wpm_max").value) $("wpm_max").value = $("wpm_min").value; });
+$("wpm_max").addEventListener("input", () => { if (+$("wpm_max").value < +$("wpm_min").value) $("wpm_min").value = $("wpm_max").value; });
+for (const id of SLIDERS) $(id).addEventListener("input", paint);
+for (const [name, p] of Object.entries(PRESETS)) {
+  const c = document.createElement("button");
+  c.className = "chip"; c.dataset.name = name;
+  c.innerHTML = `${name} <small>${p.wpm_min === p.wpm_max ? p.wpm_min : Math.round((p.wpm_min + p.wpm_max) / 2)}</small>`;
+  c.onclick = () => { if (running) return; for (const k of SLIDERS) $(k).value = p[k]; paint(); };
+  $("presets").appendChild(c);
+}
+function opts(el, items, current, onPick) {
+  el.innerHTML = "";
+  for (const v of items) {
+    const b = document.createElement("button");
+    b.className = "chip" + (v === current ? " on" : ""); b.textContent = v; b.disabled = running;
+    b.onclick = () => onPick(v); el.appendChild(b);
+  }
+}
+function renderTest() {
+  opts($("modeOpts"), Object.keys(LENGTHS), mode, v => { mode = v; amount = LENGTHS[v][v === "time" ? 0 : 1]; renderTest(); });
+  opts($("amountOpts"), LENGTHS[mode], amount, v => { amount = v; renderTest(); });
+  paint();
+}
+for (const k of SLIDERS) $(k).value = PRESETS.fast[k];
+renderTest();
+
+/* ---------------- simulator (mirrors ghostkeys.py's Typist) ---------------- */
+const WORDS = ("the be of and a to in he have it that for they with as not on she at by this we you do but from or which one would all will there say who make when can more if no man out other so what time up go about than into could state only new year some take come these know see use get like then first any work now may such give over think most even find day also after way many must look before great back through long where much should well people down own just because good each those feel seem how high too place little world very still nation hand old life tell write become here show house both between need mean call develop under last right move thing general school never same another begin while number part turn real leave might want point form off child few small since against ask late home interest large person end open public follow during present without again hold govern around possible head consider word program problem however lead system set order eye plan run keep face fact group play stand increase early course change help line").split(" ");
+const ROWS = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+function neighbor(ch) {
+  for (let r = 0; r < 3; r++) {
+    const c = ROWS[r].indexOf(ch);
+    if (c < 0) continue;
+    const o = [ROWS[r][c - 1], ROWS[r][c + 1], ROWS[r - 1]?.[c], ROWS[r + 1]?.[c]].filter(Boolean);
+    return o[Math.floor(Math.random() * o.length)];
+  }
+  return "a";
+}
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const kogasa = x => 100 * (1 - Math.tanh(x + x ** 3 / 3 + x ** 5 / 5));
+function consistencyToCov(target) {
+  if (target >= 99.9) return 0;
+  let lo = 0, hi = 3;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (kogasa(m) > target) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+function speedProfile(n, cov, warmup, fatigue) {
+  n = Math.max(5, n);
+  if (cov === 0) return Array(n).fill(1);
+  let prev = 0; const base = [];
+  for (let s = 0; s < n; s++) {
+    prev = 0.55 * prev + gauss();
+    let shape = 1;
+    if (warmup > 0 && s < warmup) shape *= 0.8 + 0.2 * (s / warmup);
+    shape *= 1 - (fatigue / 100) * (s / n);
+    base.push(shape * (1 + 0.15 * prev));
+  }
+  const mu = base.reduce((a, b) => a + b) / n;
+  const sd = Math.sqrt(base.reduce((a, b) => a + (b - mu) ** 2, 0) / n) || 1;
+  return base.map(b => Math.max(0.25, 1 + (b - mu) / sd * cov));
+}
+
+let sim = null;
+function startSim() {
+  const s = {};
+  for (const k of SLIDERS) s[k] = +$(k).value;
+  const wpm = s.wpm_min + Math.random() * (s.wpm_max - s.wpm_min);
+  const raw = wpm + s.raw_gap;
+  const cps = wpm * 5 / 60;
+  const wrongRatio = Math.max(0, raw / wpm - 1);
+  const errRate = Math.max(0, 1 - s.acc / 100);
+  const r0 = 1 + 3 * errRate + wrongRatio;
+  let cov = consistencyToCov(s.consistency);
+  const noise2 = 0.45 ** 2 / (cps * r0);
+  cov = cov > 0 ? Math.sqrt(Math.max(0, cov ** 2 - noise2)) : 0;
+  const est = mode === "time" ? +amount : (+amount * 6) / cps;
+  const prof = speedProfile(Math.ceil(est) + 5, cov, s.warmup, s.fatigue);
+  const cum = [0]; for (const m of prof) cum.push(cum.at(-1) + m);
+
+  sim = {
+    target: { wpm, raw, acc: s.acc, consistency: s.consistency },
+    cps, wrongRatio, errRate, r0, prof, cum, est,
+    t0: performance.now(), next: performance.now(),
+    keys: 0, backspaces: 0, typos: 0, leftWrong: 0, committed: 0, wrongChars: 0, inWord: 0, budget: 0,
+    perSec: [], recent: [], wordsDone: 0, queue: [], word: null, typedBad: -1, done: false, result: null,
+  };
+  running = true;
+  renderTest();
+  nextWord();
+  tick();
+  frame();
+}
+function elapsed() { return (performance.now() - sim.t0) / 1000; }
+function expected(t) {
+  const { prof, cum, cps } = sim, s = Math.floor(t);
+  if (s >= prof.length) return cps * (cum.at(-1) + (t - prof.length) * prof.at(-1));
+  return cps * (cum[s] + (t - s) * prof[s]);
+}
+function interval() {
+  const t = elapsed(), m = sim.prof[Math.min(Math.floor(t), sim.prof.length - 1)];
+  const done = sim.committed + sim.inWord;
+  const r = (sim.keys + 20 * sim.r0) / (done + 20);
+  const fb = Math.min(1.35, Math.max(0.7, 1 + (expected(t) - done) / (sim.cps * 3)));
+  return 1 / Math.max(0.5, sim.cps * r * m * fb);
+}
+/* each word becomes a queue of keystroke actions, like Typist.type_word */
+function nextWord() {
+  const w = WORDS[Math.floor(Math.random() * WORDS.length)];
+  sim.word = w; sim.inWord = 0; sim.typedBad = -1;
+  const q = [];
+  const room = sim.wrongRatio * (sim.committed + w.length + 1) - sim.wrongChars;
+  if (sim.wrongRatio > 0 && w.length >= 2 && room >= w.length + 1 && Math.random() < 0.5) {
+    const bad = Math.floor(Math.random() * w.length);
+    for (let i = 0; i < w.length; i++) q.push({ k: i === bad ? neighbor(w[i]) : w[i], pos: i, bad: i === bad });
+    q.push({ k: " ", end: false });
+    sim.budget -= 1;
+  } else {
+    for (let i = 0; i < w.length; i++) {
+      sim.budget += sim.errRate * 1.15;
+      if (sim.budget >= 1 && Math.random() < 0.6) {
+        sim.budget -= 1;
+        q.push({ k: neighbor(w[i]), pos: i, bad: true, typo: true });
+        const lag = Math.min([0, 0, 1, 1, 2][Math.floor(Math.random() * 5)], w.length - i - 1);
+        for (let j = 1; j <= lag; j++) q.push({ k: w[i + j], pos: i + j });
+        q.push({ pause: 1.5 + Math.random() * 1.5 });
+        for (let j = 0; j <= lag; j++) q.push({ k: "⌫", back: true, w: 0.7 });
+      }
+      q.push({ k: w[i], pos: i, good: true });
+    }
+    q.push({ k: " ", end: true });
+  }
+  sim.queue = q;
+}
+function finished() {
+  return mode === "time" ? elapsed() >= +amount : sim.wordsDone >= +amount;
+}
+function tick() {
+  if (!sim || sim.done) return;
+  if (finished()) return finish();
+  const now = performance.now();
+  if (now < sim.next) { setTimeout(tick, Math.max(0, sim.next - now)); return; }
+  const a = sim.queue.shift();
+  if (!a) { nextWord(); return tick(); }
+  if (a.pause) { sim.next += interval() * 1000 * a.pause; return tick(); }
+  sim.keys++;
+  if (a.back) {
+    sim.backspaces++;
+    sim.inWord = Math.max(0, sim.inWord - 1);
+    if (sim.typedBad >= sim.inWord) sim.typedBad = -1;
+  } else {
+    const sec = Math.floor(elapsed());
+    sim.perSec[sec] = (sim.perSec[sec] || 0) + 1;
+    if (a.k === " ") {
+      if (a.end) sim.committed += sim.word.length + 1;
+      else { sim.wrongChars += sim.word.length + 1; sim.leftWrong++; }
+      sim.recent = [...sim.recent, [sim.word, a.end]].slice(-12);
+      sim.wordsDone++;
+      if (finished()) return finish();           // words mode ends on the last space
+      nextWord();
+    } else {
+      if (a.bad) { sim.typos++; if (sim.typedBad < 0) sim.typedBad = a.pos; }
+      sim.inWord = a.pos + 1;
+    }
+  }
+  const base = interval() * (a.w || 1);
+  sim.next += Math.max(base * 0.25, base + gauss() * base * 0.18) * 1000;
+  setTimeout(tick, Math.max(0, sim.next - performance.now()));
+}
+function history() {
+  const n = Math.floor(elapsed());
+  const h = [];
+  for (let i = 0; i < n; i++) h.push((sim.perSec[i] || 0) * 12);
+  return h;
+}
+function finish() {
+  sim.done = true;
+  const el = Math.min(elapsed(), mode === "time" ? +amount : elapsed());
+  // Monkeytype counts the correctly typed part of the last word when time runs out
+  if (mode === "time" && sim.typedBad < 0) sim.committed += sim.inWord;
+  const h = [];
+  for (let i = 0; i < Math.floor(el); i++) h.push((sim.perSec[i] || 0) * 12);
+  const mu = h.reduce((a, b) => a + b, 0) / (h.length || 1);
+  const sd = Math.sqrt(h.reduce((a, b) => a + (b - mu) ** 2, 0) / (h.length || 1));
+  const typed = sim.keys - sim.backspaces;
+  sim.result = {
+    wpm: sim.committed * 12 / el,
+    raw: (sim.committed + sim.wrongChars) * 12 / el,
+    acc: 100 * (typed - sim.typos) / typed,
+    consistency: mu ? kogasa(sd / mu) : 0,
+    history: h, elapsed: el,
+  };
+  running = false;
+  renderTest();
+}
+function stopSim() { if (sim) { sim.done = true; running = false; renderTest(); } }
+$("go").onclick = () => running ? stopSim() : startSim();
+
+/* ---------------- rendering ---------------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let lastDraw = 0;
+function frame(ts = 0) {
+  if (!sim) return;
+  if (ts - lastDraw > 90 || sim.done) { lastDraw = ts; render(); }
+  if (!sim.done) requestAnimationFrame(frame);
+}
+function render() {
+  const t = sim.target, res = sim.result;
+  const el = res ? res.elapsed : elapsed();
+  const wpm = res ? res.wpm : (el > 1 ? sim.committed * 12 / el : null);
+  const raw = res ? res.raw : (el > 1 ? (sim.committed + sim.wrongChars) * 12 / el : null);
+  const typed = sim.keys - sim.backspaces;
+  const acc = res ? res.acc : (typed ? 100 * (typed - sim.typos) / typed : null);
+
+  $("go").classList.toggle("stop", running);
+  $("goText").textContent = running ? "Stop" : "Start typing";
+  $("termState").textContent = running ? "typing" : res ? "finished" : "stopped";
+  $("modeLabel").textContent = `${mode} ${amount} · simulated`;
+  $("lWpm").textContent = wpm != null ? Math.round(wpm) : 0;
+  $("tWpm").textContent = Math.round(t.wpm);
+  const d = $("dWpm");
+  if (wpm != null) { d.textContent = signed(wpm - t.wpm); d.className = "delta " + deltaCls(wpm, t.wpm); } else d.textContent = "";
+  $("elapsed").textContent = el.toFixed(1) + "s";
+  const prog = mode === "time" ? el / +amount : sim.wordsDone / +amount;
+  $("prog").style.width = Math.min(1, prog) * 100 + "%";
+  $("sRaw").textContent = raw != null ? Math.round(raw) : "—";
+  $("kRaw").textContent = "target " + Math.round(t.raw);
+  $("sAcc").innerHTML = acc != null ? Math.round(acc) + "<small>%</small>" : "—";
+  $("kAcc").textContent = "target " + t.acc + "%";
+  $("sCon").innerHTML = res ? Math.round(res.consistency) + "<small>%</small>" : (running ? "…" : "—");
+  $("kCon").textContent = "target " + t.consistency + "%";
+  $("sKeys").textContent = sim.keys;
+  $("kKeys").textContent = sim.typos + " typos";
+  $("fLeft").textContent = sim.leftWrong;
+
+  const words = sim.recent.map(([w, ok]) => `<span class="w${ok ? "" : " bad"}">${esc(w)}</span>`).join("");
+  let cur = "";
+  if (running && sim.word) {
+    const w = sim.word, i = sim.inWord;
+    const done = sim.typedBad >= 0 && sim.typedBad < i
+      ? esc(w.slice(0, sim.typedBad)) + `<s>${esc(w[sim.typedBad])}</s>` + esc(w.slice(sim.typedBad + 1, i))
+      : esc(w.slice(0, i));
+    cur = `<span class="cur"><b>${done}</b><span class="caret"></span>${esc(w.slice(i))}</span>`;
+  }
+  $("ticker").innerHTML = words + cur || `<span class="ph">starting…</span>`;
+  drawChart(res ? res.history : history(), t.wpm);
+}
+
+let chartKey = "";
+function drawChart(hist, target, force) {
+  const key = hist.length + ":" + (hist.at(-1) || 0) + ":" + target;
+  if (key === chartKey && !force) return;
+  chartKey = key;
+  const c = $("chart"), dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = c.clientWidth, h = c.clientHeight;
+  if (!w) return;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  const top = Math.max(target * 1.45, ...hist, 60), padY = 8, padL = 34;
+  const y = v => h - 18 - (v / top) * (h - 18 - padY);
+  g.font = "11px 'JetBrains Mono', monospace"; g.textBaseline = "middle";
+  for (const f of [0, .5, 1]) {
+    const v = Math.round(top * f / 10) * 10, yy = Math.round(y(v)) + .5;
+    g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(padL, yy); g.lineTo(w, yy); g.stroke();
+    g.fillStyle = "rgba(255,255,255,.35)"; g.fillText(v, 0, yy);
+  }
+  if (target) {
+    const ty = Math.round(y(target)) + .5;
+    g.strokeStyle = "rgba(255,255,255,.55)"; g.setLineDash([2, 4]);
+    g.beginPath(); g.moveTo(padL, ty); g.lineTo(w, ty); g.stroke(); g.setLineDash([]);
+    g.fillStyle = "#fff"; g.textAlign = "right"; g.fillText("target " + Math.round(target), w, ty - 10); g.textAlign = "left";
+  }
+  const n = Math.max(hist.length - 1, 14), x = i => padL + (i / n) * (w - padL - 4);
+  if (hist.length > 1) {
+    g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.lineJoin = "round";
+    g.beginPath(); hist.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v))); g.stroke();
+    g.fillStyle = "#fff"; g.fillRect(x(hist.length - 1) - 3, y(hist.at(-1)) - 3, 6, 6);
+  }
+  g.fillStyle = "rgba(255,255,255,.35)";
+  g.fillText("0s", padL, h - 6);
+  if (hist.length) { g.textAlign = "right"; g.fillText(hist.length + "s", w, h - 6); g.textAlign = "left"; }
+}
+drawChart([], 0, true);
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { chartKey = ""; if (sim) render(); else drawChart([], 0, true); }, 150); });
+</script>
+</body>
+</html>
